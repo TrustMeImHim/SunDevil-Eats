@@ -1,110 +1,193 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ShoppingCart, Clock, MapPin, MessageSquare, Sparkles } from 'lucide-react';
 
 const FoodDeliveryApp = () => {
     const [cart, setCart] = useState([]);
-    const [view, setView] = useState('menu');
+    const [view, setView] = useState('menu'); // 'menu' | 'cart' | 'recipe'
     const [selectedSection, setSelectedSection] = useState('Pre-Made Meals');
+    const [selectedRecipe, setSelectedRecipe] = useState(null);
+    const [servings, setServings] = useState(2);
     const [address, setAddress] = useState('');
     const [orderInstructions, setOrderInstructions] = useState('');
     const [itemNotes, setItemNotes] = useState({});
     const [promoCode, setPromoCode] = useState('');
     const [discount, setDiscount] = useState(0);
 
+    // ----------- Sections -----------
     const sections = [
         { name: 'Pre-Made Meals', icon: '🍱' },
-        { name: 'Groceries',      icon: '🛒' },
-        { name: 'Outside Food',   icon: '🍕' },
+        { name: 'Groceries', icon: '🛒' },
+        { name: 'Outside Food', icon: '🍕' },
     ];
 
+    // ----------- Recipes (used for Meal Prep + Macros in Cart) -----------
+    const recipes = {
+        'Chicken Alfredo': {
+            baseServings: 2,
+            macrosPerServing: { cal: 700, protein: 38, carbs: 60, fat: 28 },
+            ingredients: [
+                { name: 'Chicken Breast', qty: '450 g' },
+                { name: 'Fettuccine Pasta', qty: '180 g' },
+                { name: 'Alfredo Sauce', qty: '1 cup' },
+                { name: 'Parmesan', qty: '30 g' },
+                { name: 'Garlic', qty: '2 cloves' },
+                { name: 'Olive Oil / Butter', qty: '1 tbsp' },
+            ],
+            steps: [
+                'Boil pasta until al dente.',
+                'Sear chicken 4–6 min per side; slice.',
+                'Warm Alfredo sauce and toss with pasta.',
+                'Top with chicken and Parmesan.',
+            ],
+        },
+        'Burrito Bowl': {
+            baseServings: 2,
+            macrosPerServing: { cal: 650, protein: 35, carbs: 75, fat: 18 },
+            ingredients: [
+                { name: 'Rice', qty: '1 cup (dry)' },
+                { name: 'Black Beans', qty: '1 can (15 oz)' },
+                { name: 'Grilled Chicken', qty: '300 g' },
+                { name: 'Salsa', qty: '1/2 cup' },
+                { name: 'Shredded Cheese', qty: '1/2 cup' },
+                { name: 'Lettuce', qty: '2 cups' },
+            ],
+            steps: [
+                'Cook rice and warm beans.',
+                'Layer rice, beans, chicken, lettuce.',
+                'Top with salsa and cheese.',
+            ],
+        },
+        'Healthier Cookies': {
+            baseServings: 8,
+            macrosPerServing: { cal: 150, protein: 3, carbs: 24, fat: 5 },
+            ingredients: [
+                { name: 'Oats', qty: '1 cup' },
+                { name: 'Banana', qty: '2 medium' },
+                { name: 'Honey', qty: '2 tbsp' },
+                { name: 'Dark Chocolate Chips', qty: '1/4 cup' },
+                { name: 'Cinnamon', qty: '1/2 tsp' },
+            ],
+            steps: [
+                'Preheat oven to 350°F.',
+                'Mash bananas and mix all ingredients.',
+                'Bake 12 minutes and cool 5 minutes.',
+            ],
+        },
+        'Chicken Caesar Salad': {
+            baseServings: 2,
+            macrosPerServing: { cal: 480, protein: 34, carbs: 18, fat: 28 },
+            ingredients: [
+                { name: 'Romaine Lettuce', qty: '3 cups' },
+                { name: 'Grilled Chicken', qty: '300 g' },
+                { name: 'Croutons', qty: '1 cup' },
+                { name: 'Parmesan', qty: '1/4 cup' },
+                { name: 'Caesar Dressing', qty: '1/3 cup' },
+            ],
+            steps: [
+                'Chop lettuce and toss with dressing.',
+                'Add chicken, croutons, and Parmesan.',
+            ],
+        },
+    };
+
+    // ----------- Menu -----------
     const menuData = {
         'Pre-Made Meals': [
-            { id: 1,  name: 'Chicken Alfredo',             price: 9.99, cal: 700, time: '12-16', image: '🍝', category: 'Dinner' },
-            { id: 2,  name: 'Grilled Chicken Bowl',        price: 8.49, cal: 520, time: '12-15', image: '🍗', category: 'High Protein' },
-            { id: 3,  name: 'Turkey Sandwich',             price: 7.49, cal: 430, time: '8-10',  image: '🥪', category: 'Lunch' },
-            { id: 4,  name: 'Veggie Stir-Fry',             price: 7.99, cal: 420, time: '10-12', image: '🥦', category: 'Vegetarian' },
-            { id: 5,  name: 'Burrito Bowl',                price: 8.99, cal: 610, time: '12-15', image: '🌯', category: 'Mexican' },
-            { id: 6,  name: 'Tomato Soup & Grilled Cheese',price: 6.99, cal: 500, time: '8-10',  image: '🧀', category: 'Comfort' },
-            { id: 7,  name: 'Chicken Caesar Salad',        price: 8.29, cal: 460, time: '8-10',  image: '🥗', category: 'Salads' },
-            { id: 8,  name: 'Mac & Cheese',                price: 6.49, cal: 640, time: '8-10',  image: '🧈', category: 'Comfort' },
-            { id: 9,  name: 'Breakfast Burrito',           price: 7.49, cal: 530, time: '10-12', image: '🥚', category: 'Breakfast' },
-            { id: 10, name: 'BBQ Chicken Sandwich',        price: 8.79, cal: 570, time: '10-15', image: '🍖', category: 'Lunch' },
+            { id: 1, name: 'Chicken Alfredo', price: 9.99, cal: 700, time: '12-16', image: '🍝', category: 'Dinner', hasRecipe: true },
+            { id: 2, name: 'Grilled Chicken Bowl', price: 8.49, cal: 520, time: '12-15', image: '🍗', category: 'High Protein' },
+            { id: 5, name: 'Burrito Bowl', price: 8.99, cal: 610, time: '12-15', image: '🌯', category: 'Mexican', hasRecipe: true },
+            { id: 7, name: 'Chicken Caesar Salad', price: 8.29, cal: 460, time: '8-10', image: '🥗', category: 'Salads', hasRecipe: true },
+            { id: 8, name: 'Mac & Cheese', price: 6.49, cal: 640, time: '8-10', image: '🧈', category: 'Comfort' },
+            { id: 9, name: 'Healthier Cookies', price: 4.99, cal: 150, time: '15-18', image: '🍪', category: 'Dessert', hasRecipe: true },
         ],
-
         'Groceries': [
-            { id: 101, name: 'Bananas (6 ct)',             price: 1.99, image: '🍌', category: 'Produce' },
-            { id: 102, name: 'Strawberries (1 lb)',        price: 3.99, image: '🍓', category: 'Produce' },
-            { id: 103, name: 'Whole Wheat Bread',          price: 2.49, image: '🍞', category: 'Bakery' },
-            { id: 104, name: 'Milk (1/2 gal)',             price: 2.99, image: '🥛', category: 'Dairy' },
-            { id: 105, name: 'Eggs (12 ct)',               price: 3.49, image: '🥚', category: 'Dairy' },
-            { id: 106, name: 'Cheddar Cheese (8 oz)',      price: 2.99, image: '🧀', category: 'Dairy' },
-            { id: 107, name: 'Pasta (1 lb)',               price: 1.79, image: '🍝', category: 'Pantry' },
-            { id: 108, name: 'Granola Bars (6 ct)',        price: 3.49, image: '🍫', category: 'Snacks' },
-            { id: 109, name: 'Cereal (12 oz)',             price: 4.29, image: '🥣', category: 'Breakfast' },
-            { id: 110, name: 'Ramen Pack (6 ct)',          price: 2.99, image: '🍜', category: 'Pantry' },
-            { id: 111, name: 'Frozen Pizza',               price: 5.99, image: '🍕', category: 'Frozen' },
-            { id: 112, name: 'Chicken Nuggets (1 lb)',     price: 6.49, image: '🍗', category: 'Frozen' },
+            { id: 101, name: 'Bananas (6 ct)', price: 1.99, image: '🍌', category: 'Produce' },
+            { id: 102, name: 'Strawberries (1 lb)', price: 3.99, image: '🍓', category: 'Produce' },
+            { id: 103, name: 'Whole Wheat Bread', price: 2.49, image: '🍞', category: 'Bakery' },
+            { id: 104, name: 'Milk (1/2 gal)', price: 2.99, image: '🥛', category: 'Dairy' },
+            { id: 105, name: 'Eggs (12 ct)', price: 3.49, image: '🥚', category: 'Dairy' },
         ],
-
         'Outside Food': [
-            { id: 201, name: 'Panda Express Plate',        price: 11.49, time: '18-28', image: '🥡', restaurant: 'Panda Express' },
-            { id: 202, name: 'Chick-fil-A Sandwich Meal',  price: 10.49, time: '12-20', image: '🍔', restaurant: 'Chick-fil-A' },
-            { id: 203, name: 'Double-Double Combo',        price: 9.99,  time: '10-18', image: '🍔', restaurant: 'In-N-Out Burger' },
-            { id: 204, name: "Barro's Large Pepperoni",    price: 16.99, time: '20-30', image: '🍕', restaurant: "Barro's Pizza" },
-            { id: 205, name: '10pc Classic Wings + Fries', price: 14.49, time: '18-25', image: '🍗', restaurant: 'Wingstop' },
-            { id: 206, name: 'Panda Bowl (1 Entrée)',      price: 9.29,  time: '15-20', image: '🥢', restaurant: 'Panda Express' },
-            { id: 207, name: 'Chick-fil-A Nuggets (8 ct)', price: 9.79,  time: '12-18', image: '🐔', restaurant: 'Chick-fil-A' },
-            { id: 208, name: 'In-N-Out Fries & Shake',     price: 6.99,  time: '8-12',  image: '🥤', restaurant: 'In-N-Out Burger' },
+            { id: 201, name: 'Panda Express Plate', price: 11.49, time: '18-28', image: '🥡', restaurant: 'Panda Express' },
+            { id: 202, name: 'Chick-fil-A Sandwich Meal', price: 10.49, time: '12-20', image: '🍔', restaurant: 'Chick-fil-A' },
+            { id: 203, name: 'Double-Double Combo', price: 9.99, time: '10-18', image: '🍔', restaurant: 'In-N-Out' },
+            { id: 204, name: '10pc Classic Wings + Fries', price: 14.49, time: '18-25', image: '🍗', restaurant: 'Wingstop' },
         ],
     };
 
+    // ----------- Helpers: Images (no downloads needed) -----------
+    // Uses Unsplash Source. In prod, check license/attribution needs; avoid hotlinking brand logos.
+    const imageFor = (name) =>
+        `https://source.unsplash.com/600x400/?${encodeURIComponent(name + ', food')}`;
+
+    // ----------- Cart + Checkout -----------
     const addToCart = (item) => {
-        const existing = cart.find(c => c.id === item.id);
-        if (existing) setCart(cart.map(c => c.id === item.id ? {...c, qty: c.qty + 1} : c));
-        else setCart([...cart, {...item, qty: 1}]);
-    };
-
-    const removeFromCart = (id) => {
-        const existing = cart.find(c => c.id === id);
-        if (!existing) return;
-        if (existing.qty > 1) setCart(cart.map(c => c.id === id ? {...c, qty: c.qty - 1} : c));
-        else {
-            setCart(cart.filter(c => c.id !== id));
-            const next = {...itemNotes}; delete next[id]; setItemNotes(next);
-        }
-    };
-
-    const updateItemNote = (id, note) => setItemNotes({...itemNotes, [id]: note});
-
-    const applyPromo = () => {
-        const code = promoCode.trim().toUpperCase();
-        if (code === 'ASU10') { setDiscount(0.10); alert('🎉 10% student discount applied!'); }
-        else if (code === 'FIRST20') { setDiscount(0.20); alert('🎉 20% first order discount applied!'); }
-        else if (code === 'FORKS') { alert('✅ Free utensils added to your order!'); }
-        else { setDiscount(0); alert('❌ Invalid promo code'); }
+        const exists = cart.find((c) => c.id === item.id);
+        if (exists) setCart(cart.map((c) => (c.id === item.id ? { ...c, qty: c.qty + 1 } : c)));
+        else setCart([...cart, { ...item, qty: 1 }]);
     };
 
     const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
     const discountAmount = subtotal * discount;
     const total = subtotal - discountAmount;
-    const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
     const handleCheckout = () => {
-        if (!address.trim()) return;
-        let msg = `Order placed! 🎉\n\nDelivering to: ${address}\nTotal: $${total.toFixed(2)}`;
-        if (orderInstructions) msg += `\n\nDelivery Instructions: ${orderInstructions}`;
-        const withNotes = cart.filter(i => itemNotes[i.id]);
-        if (withNotes.length) {
-            msg += `\n\nSpecial Requests:`;
-            withNotes.forEach(i => { msg += `\n- ${i.name}: ${itemNotes[i.id]}`; });
-        }
-        msg += `\n\nEstimated delivery: 25-35 mins`;
-        alert(msg);
-
-        setCart([]); setView('menu'); setAddress(''); setOrderInstructions('');
-        setItemNotes({}); setPromoCode(''); setDiscount(0);
+        if (!address.trim()) return alert('Enter a delivery address first!');
+        alert(
+            `Order placed!\nDelivering to: ${address}\nTotal: $${total.toFixed(
+                2
+            )}\nEstimated delivery: 25-35 mins`
+        );
+        setCart([]);
+        setView('menu');
     };
 
+    // ----------- Recipe Logic -----------
+    const currentRecipe = selectedRecipe ? recipes[selectedRecipe] : null;
+    const scaleQty = (qty, factor) => {
+        const m = String(qty).match(/([0-9]*\.?[0-9]+)/);
+        if (!m) return `${qty} × ${factor}`;
+        const scaled = parseFloat(m[1]) * factor;
+        return String(qty).replace(m[1], (Math.round(scaled * 100) / 100).toString());
+    };
+
+    const scaledIngredients = useMemo(() => {
+        if (!currentRecipe) return [];
+        const factor = servings / currentRecipe.baseServings;
+        return currentRecipe.ingredients.map((i) => ({
+            ...i,
+            qty: scaleQty(i.qty, factor),
+        }));
+    }, [currentRecipe, servings]);
+
+    // ----------- Estimated Macros in Cart (from meals only) -----------
+    // We count macros from items that match a recipe by name OR have ids like 'premade-<Recipe Name>'
+    const cartMacros = useMemo(() => {
+        const totals = { cal: 0, protein: 0, carbs: 0, fat: 0 };
+        for (const item of cart) {
+            // try by name
+            let recipeName = null;
+            if (recipes[item.name]) recipeName = item.name;
+            // try premade id format
+            if (!recipeName && typeof item.id === 'string' && item.id.startsWith('premade-')) {
+                const n = item.id.replace(/^premade-/, '');
+                if (recipes[n]) recipeName = n;
+            }
+            if (!recipeName) continue;
+
+            const m = recipes[recipeName].macrosPerServing;
+            // assume 1 serving per pre-made item ordered
+            totals.cal += m.cal * item.qty;
+            totals.protein += m.protein * item.qty;
+            totals.carbs += m.carbs * item.qty;
+            totals.fat += m.fat * item.qty;
+        }
+        // round nicely
+        for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k]);
+        return totals;
+    }, [cart]);
+
+    // ----------- UI -----------
     const currentItems = menuData[selectedSection] || [];
 
     return (
@@ -112,174 +195,274 @@ const FoodDeliveryApp = () => {
             <div className="container">
                 {/* Header */}
                 <div className="card header">
-                    <div className="header-left">
+                    <div>
                         <h1 className="title">🔱 SunDevil Eats</h1>
                         <p className="subtitle">Everything You Need, Delivered</p>
                     </div>
-                    <button className="btn btn-maroon cart-btn" onClick={() => setView(view === 'cart' ? 'menu' : 'cart')}>
-                        <ShoppingCart size={18} />
-                        <span>Cart</span>
-                        {cartCount > 0 && <span className="badge">{cartCount}</span>}
+                    <button
+                        className="btn btn-maroon"
+                        onClick={() => setView(view === 'cart' ? 'menu' : 'cart')}
+                    >
+                        <ShoppingCart size={18} /> Cart ({cart.length})
                     </button>
                 </div>
 
-                {view === 'menu' ? (
+                {/* Menu */}
+                {view === 'menu' && (
                     <>
-                        {/* Address */}
-                        <div className="card">
-                            <h2 className="section-title">📍 Delivery Address</h2>
-                            <input
-                                className="input"
-                                type="text"
-                                placeholder="Enter your dorm or ASU address..."
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                            />
-                        </div>
-
-                        {/* Tabs */}
                         <div className="tabs">
-                            {sections.map(s => (
+                            {sections.map((s) => (
                                 <button
                                     key={s.name}
+                                    className={`tab ${selectedSection === s.name ? 'active' : ''}`}
                                     onClick={() => setSelectedSection(s.name)}
-                                    className={`tab ${selectedSection === s.name ? 'tab-active' : ''}`}
                                 >
-                                    <span className="emoji">{s.icon}</span>{s.name}
+                                    {s.icon} {s.name}
                                 </button>
                             ))}
                         </div>
 
-                        {/* Grid of items */}
                         <div className="grid">
-                            {currentItems.map(item => (
-                                <article key={item.id} className="card product">
+                            {currentItems.map((item) => (
+                                <div key={item.id} className="card product">
                                     <div className="product-hero">
-                                        <span className="hero-emoji" aria-hidden>{item.image}</span>
-                                    </div>
-                                    <div className="product-body">
-                                        <div className="product-header">
-                                            <div className="product-titles">
-                                                <h3 className="product-name">{item.name}</h3>
-                                                <p className="product-sub">{item.category || item.restaurant || ''}</p>
-                                            </div>
-                                            <span className="product-price">${item.price}</span>
+                                        <img
+                                            src={imageFor(item.name)}
+                                            alt={item.name}
+                                            loading="lazy"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                            style={{ width: '100%', borderRadius: 12, objectFit: 'cover' }}
+                                        />
+                                        <div className="emoji" aria-hidden>
+                                            {item.image}
                                         </div>
-
-                                        <div className="product-meta">
+                                    </div>
+                                    <h3>{item.name}</h3>
+                                    <p className="muted">{item.category || item.restaurant || ''}</p>
+                                    <div className="product-meta">
+                                        <span className="price">${item.price.toFixed(2)}</span>
+                                        <div className="meta-right">
                                             {item.time && (
                                                 <span className="meta">
                           <Clock size={14} /> {item.time} min
                         </span>
                                             )}
-                                            {item.cal && (
-                                                <span className="meta">🔥 {item.cal} cal</span>
-                                            )}
+                                            {item.cal && <span className="meta">🔥 {item.cal} cal</span>}
                                         </div>
-
-                                        <button className="btn btn-grad" onClick={() => addToCart(item)}>+ Add to Cart</button>
                                     </div>
-                                </article>
+
+                                    <div className="product-actions">
+                                        <button className="btn btn-grad" onClick={() => addToCart(item)}>
+                                            + Add to Cart
+                                        </button>
+                                        {item.hasRecipe && (
+                                            <button
+                                                className="btn btn-lite"
+                                                onClick={() => {
+                                                    setSelectedRecipe(item.name);
+                                                    setServings(recipes[item.name].baseServings);
+                                                    setView('recipe');
+                                                }}
+                                            >
+                                                🧑‍🍳 View Recipe
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     </>
-                ) : (
-                    <div className="card">
-                        <h2 className="cart-title">🛒 Your Cart</h2>
+                )}
 
-                        {cart.length === 0 ? (
-                            <div className="empty">
-                                <p>Your cart is empty</p>
-                                <button className="btn btn-grad" onClick={() => setView('menu')}>Browse Menu</button>
+                {/* Recipe */}
+                {view === 'recipe' && currentRecipe && (
+                    <div className="card recipe">
+                        <div className="product-hero">
+                            <img
+                                src={imageFor(selectedRecipe)}
+                                alt={selectedRecipe}
+                                loading="lazy"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                                style={{ width: '100%', borderRadius: 12, objectFit: 'cover' }}
+                            />
+                            <div className="emoji" aria-hidden>
+                                🍽️
                             </div>
+                        </div>
+
+                        <h2>{selectedRecipe}</h2>
+                        <div className="macros">
+                            <p>
+                                <strong>Per Serving:</strong> {currentRecipe.macrosPerServing.cal} cal •{' '}
+                                {currentRecipe.macrosPerServing.protein}g P •{' '}
+                                {currentRecipe.macrosPerServing.carbs}g C • {currentRecipe.macrosPerServing.fat}g F
+                            </p>
+                            <label className="servings">
+                                Servings:{' '}
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={servings}
+                                    onChange={(e) => setServings(Number(e.target.value))}
+                                />
+                            </label>
+                        </div>
+
+                        <h3>Ingredients</h3>
+                        <ul>
+                            {scaledIngredients.map((i, idx) => (
+                                <li key={idx}>
+                                    {i.qty} {i.name}
+                                </li>
+                            ))}
+                        </ul>
+
+                        <h3>Steps</h3>
+                        <ol>
+                            {currentRecipe.steps.map((s, i) => (
+                                <li key={i}>{s}</li>
+                            ))}
+                        </ol>
+
+                        <div className="recipe-actions">
+                            <button
+                                className="btn btn-grad"
+                                onClick={() => alert('🛒 Ingredients added to cart!')}
+                            >
+                                Add Ingredients to Cart
+                            </button>
+                            <button
+                                className="btn btn-maroon"
+                                onClick={() => {
+                                    addToCart({
+                                        id: `premade-${selectedRecipe}`,
+                                        name: selectedRecipe,
+                                        price: 9.99,
+                                        image: '🍽️',
+                                        qty: 1,
+                                    });
+                                    alert('✅ Pre-made meal added to cart!');
+                                }}
+                            >
+                                Order Pre-Made Instead
+                            </button>
+                            <button className="btn btn-lite" onClick={() => setView('menu')}>
+                                ← Back
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Cart */}
+                {view === 'cart' && (
+                    <div className="card">
+                        <h2>🛒 Your Cart</h2>
+                        {cart.length === 0 ? (
+                            <p>Your cart is empty.</p>
                         ) : (
                             <>
-                                <div className="cart-list">
-                                    {cart.map(item => (
-                                        <div key={item.id} className="cart-row">
-                                            <div className="cart-main">
-                                                <span className="cart-emoji">{item.image}</span>
-                                                <div>
-                                                    <div className="cart-name">{item.name}</div>
-                                                    <div className="cart-each">${item.price} each</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="cart-actions">
-                                                <div className="qty">
-                                                    <button onClick={() => removeFromCart(item.id)} className="qty-btn">−</button>
-                                                    <span className="qty-num">{item.qty}</span>
-                                                    <button onClick={() => addToCart(item)} className="qty-btn">+</button>
-                                                </div>
-                                                <div className="cart-row-total">${(item.price * item.qty).toFixed(2)}</div>
-                                            </div>
-
-                                            <div className="note">
-                                                <label className="note-label">
-                                                    <MessageSquare size={14} /> Special instructions
-                                                </label>
-                                                <input
-                                                    className="input"
-                                                    type="text"
-                                                    placeholder="e.g., No onions, extra sauce..."
-                                                    value={itemNotes[item.id] || ''}
-                                                    onChange={(e) => updateItemNote(item.id, e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
+                                <ul>
+                                    {cart.map((i, idx) => (
+                                        <li key={idx}>
+                                            {i.image} {i.name} — ${i.price.toFixed(2)} × {i.qty}
+                                        </li>
                                     ))}
-                                </div>
+                                </ul>
 
-                                <div className="promo card-lite">
-                                    <label className="promo-label">
-                                        <Sparkles size={16} /> Promo Code
-                                    </label>
-                                    <div className="promo-row">
-                                        <input
-                                            className="input"
-                                            placeholder="ASU10, FIRST20, FORKS"
-                                            value={promoCode}
-                                            onChange={(e) => setPromoCode(e.target.value)}
-                                        />
-                                        <button className="btn btn-yellow" onClick={applyPromo}>Apply</button>
-                                    </div>
-                                </div>
-
-                                <div className="totals card-lite">
-                                    <div className="totals-row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-                                    {discount > 0 && (
-                                        <div className="totals-row green">
-                                            <span>Discount ({(discount * 100).toFixed(0)}%)</span>
-                                            <span>- ${discountAmount.toFixed(2)}</span>
+                                {/* Estimated macros from meals */}
+                                {(cartMacros.cal + cartMacros.protein + cartMacros.carbs + cartMacros.fat > 0) && (
+                                    <div
+                                        style={{
+                                            marginTop: 12,
+                                            padding: '10px 12px',
+                                            border: '1px solid #eaeaea',
+                                            borderRadius: 12,
+                                            background: '#fffdf6',
+                                        }}
+                                    >
+                                        <strong>Estimated Macros (meals in cart):</strong>
+                                        <div style={{ marginTop: 6 }}>
+                                            {cartMacros.cal} cal • {cartMacros.protein}g P • {cartMacros.carbs}g C •{' '}
+                                            {cartMacros.fat}g F
                                         </div>
-                                    )}
-                                    <div className="totals-row"><span>Delivery Fee</span><span className="green">FREE</span></div>
-                                    <div className="totals-total"><span>Total</span><span>${total.toFixed(2)}</span></div>
-                                </div>
-
-                                <div className="address card-lite">
-                                    <label className="label"><MapPin size={16} /> Delivery Address</label>
-                                    <input
-                                        className="input"
-                                        placeholder="Enter your dorm or ASU address..."
-                                        value={address}
-                                        onChange={(e) => setAddress(e.target.value)}
-                                    />
-                                    <label className="label"><MessageSquare size={16} /> Delivery Instructions (Optional)</label>
-                                    <textarea
-                                        className="input textarea"
-                                        rows={3}
-                                        placeholder="e.g., Leave at door, call when here, gate code..."
-                                        value={orderInstructions}
-                                        onChange={(e) => setOrderInstructions(e.target.value)}
-                                    />
-                                </div>
-
-                                <button className="btn btn-grad big" disabled={!address.trim()} onClick={handleCheckout}>
-                                    Place Order — ${total.toFixed(2)}
-                                </button>
+                                        <div style={{ fontSize: 12, color: '#777', marginTop: 4 }}>
+                                            Groceries are not counted in macros.
+                                        </div>
+                                    </div>
+                                )}
                             </>
                         )}
+
+                        <div style={{ marginTop: 16 }}>
+                            <p>
+                                <strong>Total:</strong> ${total.toFixed(2)}
+                            </p>
+                        </div>
+
+                        <div className="promo card-lite" style={{ marginTop: 12 }}>
+                            <label className="promo-label">
+                                <Sparkles size={16} /> Promo Code
+                            </label>
+                            <div className="promo-row">
+                                <input
+                                    className="input"
+                                    placeholder="ASU10, FIRST20, FORKS"
+                                    value={promoCode}
+                                    onChange={(e) => setPromoCode(e.target.value)}
+                                />
+                                <button
+                                    className="btn btn-yellow"
+                                    onClick={() => {
+                                        const code = promoCode.trim().toUpperCase();
+                                        if (code === 'ASU10') {
+                                            setDiscount(0.1);
+                                            alert('🎉 10% student discount applied!');
+                                        } else if (code === 'FIRST20') {
+                                            setDiscount(0.2);
+                                            alert('🎉 20% first order discount applied!');
+                                        } else if (code === 'FORKS') {
+                                            alert('✅ Free utensils added to your order!');
+                                        } else {
+                                            setDiscount(0);
+                                            alert('❌ Invalid promo code');
+                                        }
+                                    }}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="address card-lite" style={{ marginTop: 12 }}>
+                            <label className="label">
+                                <MapPin size={16} /> Delivery Address
+                            </label>
+                            <input
+                                className="input"
+                                placeholder="Enter your dorm or ASU address..."
+                                value={address}
+                                onChange={(e) => setAddress(e.target.value)}
+                            />
+                            <label className="label">
+                                <MessageSquare size={16} /> Delivery Instructions (Optional)
+                            </label>
+                            <textarea
+                                className="input textarea"
+                                rows={3}
+                                placeholder="e.g., Leave at door, call when here, gate code..."
+                                value={orderInstructions}
+                                onChange={(e) => setOrderInstructions(e.target.value)}
+                            />
+                        </div>
+
+                        <button className="btn btn-grad big" onClick={handleCheckout} style={{ marginTop: 12 }}>
+                            Place Order
+                        </button>
+                        <button className="btn btn-lite" onClick={() => setView('menu')} style={{ marginTop: 8 }}>
+                            ← Back
+                        </button>
                     </div>
                 )}
             </div>
