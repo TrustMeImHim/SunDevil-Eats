@@ -201,7 +201,7 @@ export default function FoodDeliveryApp() {
     const Home = () => (
         <div className="card">
             <h1 className="title">🔱 SunDevil Eats — Meal Prep</h1>
-            <p className="subtitle">Healthy, bagged meals for students — grab & go from your campus store.</p>
+            <p className="subtitle">Healthy, bagged meals for students | grab & go from your campus store.</p>
 
             {/* Campus Picker */}
             <div className="card-lite" style={{ marginTop: 12 }}>
