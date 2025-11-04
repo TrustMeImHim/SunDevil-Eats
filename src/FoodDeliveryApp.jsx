@@ -1,473 +1,532 @@
 import React, { useMemo, useState } from 'react';
-import { ShoppingCart, Clock, MapPin, MessageSquare, Sparkles } from 'lucide-react';
+import { ShoppingCart, MapPin, Clock, Truck } from 'lucide-react';
 
-const FoodDeliveryApp = () => {
-    const [cart, setCart] = useState([]);
-    const [view, setView] = useState('menu'); // 'menu' | 'cart' | 'recipe'
-    const [selectedSection, setSelectedSection] = useState('Pre-Made Meals');
-    const [selectedRecipe, setSelectedRecipe] = useState(null);
-    const [servings, setServings] = useState(2);
+/**
+ * SunDevil Eats — Meal Prep Builder (Pickup-first + Tempe delivery)
+ * - Campus selection gate
+ * - Build “bags” (pre-made meals) with Chef's Choice or Custom selections
+ * - Quick 3-pack / 5-pack bundles
+ * - Pickup time; Delivery only if campus === "Tempe"
+ * - Cart groups items by Bag # and totals with discounts & upcharges
+ *
+ * Styling: uses your existing .app-bg, .container, .card, .btn, .btn-maroon, .btn-grad, .input, .label, .grid, etc.
+ * If something looks off, tweak App.css (no Tailwind needed).
+ */
+
+const CAMPUSES = [
+    { id: 'Tempe', label: 'Tempe (Pickup + Delivery)', delivery: true },
+    { id: 'West', label: 'West (Pickup Only)', delivery: false },
+    { id: 'Polytechnic', label: 'Polytechnic (Pickup Only)', delivery: false },
+    { id: 'Downtown', label: 'Downtown (Pickup Only)', delivery: false },
+];
+
+// Builder options
+const BASE_PRICE = 8.99;           // Chef’s Choice
+const CUSTOM_UPCHARGE = 1.5;       // Custom build
+const STEAK_UPCHARGE = 2.0;        // Additional if steak selected
+const BUNDLE_DISCOUNTS = { 3: 1.5, 5: 4.0 }; // dollars off total for quick bundles
+
+const PROTEINS = [
+    { id: 'chicken', label: 'Chicken' },
+    { id: 'beef', label: 'Lean Beef' },
+    { id: 'steak', label: 'Steak (+$2)' },
+    { id: 'tofu', label: 'Tofu' },
+];
+
+const CARBS = [
+    { id: 'rice', label: 'Brown Rice' },
+    { id: 'quinoa', label: 'Quinoa' },
+    { id: 'pasta', label: 'Whole-wheat Pasta' },
+];
+
+const VEGGIES = [
+    { id: 'broccoli', label: 'Broccoli' },
+    { id: 'asparagus', label: 'Asparagus' },
+    { id: 'mix', label: 'Mixed Veg' },
+];
+
+const SAUCES = [
+    { id: 'none', label: 'No sauce' },
+    { id: 'teriyaki', label: 'Teriyaki' },
+    { id: 'chipotle', label: 'Chipotle Lime' },
+    { id: 'alfredo', label: 'Light Alfredo' },
+];
+
+export default function FoodDeliveryApp() {
+    // global UI
+    const [view, setView] = useState('home'); // 'home' | 'build' | 'cart'
+    const [campus, setCampus] = useState(null);
+
+    // order mode
+    const [fulfillment, setFulfillment] = useState('pickup'); // 'pickup' | 'delivery' (delivery only at Tempe)
+    const [pickupTime, setPickupTime] = useState('Today 5:00–5:30 PM');
     const [address, setAddress] = useState('');
-    const [orderInstructions, setOrderInstructions] = useState('');
-    const [itemNotes, setItemNotes] = useState({});
-    const [promoCode, setPromoCode] = useState('');
-    const [discount, setDiscount] = useState(0);
 
-    // ----------- Sections -----------
-    const sections = [
-        { name: 'Pre-Made Meals', icon: '🍱' },
-        { name: 'Groceries', icon: '🛒' },
-        { name: 'Outside Food', icon: '🍕' },
-    ];
+    // cart of “bags”
+    const [bags, setBags] = useState([]); // each bag = {id, preset:'chef'|'custom', protein, carb, veg, sauce, price}
 
-    // ----------- Recipes (used for Meal Prep + Macros in Cart) -----------
-    const recipes = {
-        'Chicken Alfredo': {
-            baseServings: 2,
-            macrosPerServing: { cal: 700, protein: 38, carbs: 60, fat: 28 },
-            ingredients: [
-                { name: 'Chicken Breast', qty: '450 g' },
-                { name: 'Fettuccine Pasta', qty: '180 g' },
-                { name: 'Alfredo Sauce', qty: '1 cup' },
-                { name: 'Parmesan', qty: '30 g' },
-                { name: 'Garlic', qty: '2 cloves' },
-                { name: 'Olive Oil / Butter', qty: '1 tbsp' },
-            ],
-            steps: [
-                'Boil pasta until al dente.',
-                'Sear chicken 4–6 min per side; slice.',
-                'Warm Alfredo sauce and toss with pasta.',
-                'Top with chicken and Parmesan.',
-            ],
-        },
-        'Burrito Bowl': {
-            baseServings: 2,
-            macrosPerServing: { cal: 650, protein: 35, carbs: 75, fat: 18 },
-            ingredients: [
-                { name: 'Rice', qty: '1 cup (dry)' },
-                { name: 'Black Beans', qty: '1 can (15 oz)' },
-                { name: 'Grilled Chicken', qty: '300 g' },
-                { name: 'Salsa', qty: '1/2 cup' },
-                { name: 'Shredded Cheese', qty: '1/2 cup' },
-                { name: 'Lettuce', qty: '2 cups' },
-            ],
-            steps: [
-                'Cook rice and warm beans.',
-                'Layer rice, beans, chicken, lettuce.',
-                'Top with salsa and cheese.',
-            ],
-        },
-        'Healthier Cookies': {
-            baseServings: 8,
-            macrosPerServing: { cal: 150, protein: 3, carbs: 24, fat: 5 },
-            ingredients: [
-                { name: 'Oats', qty: '1 cup' },
-                { name: 'Banana', qty: '2 medium' },
-                { name: 'Honey', qty: '2 tbsp' },
-                { name: 'Dark Chocolate Chips', qty: '1/4 cup' },
-                { name: 'Cinnamon', qty: '1/2 tsp' },
-            ],
-            steps: [
-                'Preheat oven to 350°F.',
-                'Mash bananas and mix all ingredients.',
-                'Bake 12 minutes and cool 5 minutes.',
-            ],
-        },
-        'Chicken Caesar Salad': {
-            baseServings: 2,
-            macrosPerServing: { cal: 480, protein: 34, carbs: 18, fat: 28 },
-            ingredients: [
-                { name: 'Romaine Lettuce', qty: '3 cups' },
-                { name: 'Grilled Chicken', qty: '300 g' },
-                { name: 'Croutons', qty: '1 cup' },
-                { name: 'Parmesan', qty: '1/4 cup' },
-                { name: 'Caesar Dressing', qty: '1/3 cup' },
-            ],
-            steps: [
-                'Chop lettuce and toss with dressing.',
-                'Add chicken, croutons, and Parmesan.',
-            ],
-        },
+    // builder state (one bag editor)
+    const [preset, setPreset] = useState('chef'); // 'chef' | 'custom'
+    const [protein, setProtein] = useState('chicken');
+    const [carb, setCarb] = useState('rice');
+    const [veg, setVeg] = useState('broccoli');
+    const [sauce, setSauce] = useState('none');
+
+    // compute bag price
+    const currentBagPrice = useMemo(() => {
+        let p = BASE_PRICE;
+        if (preset === 'custom') p += CUSTOM_UPCHARGE;
+        if (preset === 'custom' && protein === 'steak') p += STEAK_UPCHARGE;
+        return p;
+    }, [preset, protein]);
+
+    const addBag = (bag) => {
+        setBags((prev) => [...prev, { ...bag, id: `bag-${prev.length + 1}` }]);
     };
 
-    // ----------- Menu -----------
-    const menuData = {
-        'Pre-Made Meals': [
-            { id: 1, name: 'Chicken Alfredo', price: 9.99, cal: 700, time: '12-16', image: '🍝', category: 'Dinner', hasRecipe: true },
-            { id: 2, name: 'Grilled Chicken Bowl', price: 8.49, cal: 520, time: '12-15', image: '🍗', category: 'High Protein' },
-            { id: 5, name: 'Burrito Bowl', price: 8.99, cal: 610, time: '12-15', image: '🌯', category: 'Mexican', hasRecipe: true },
-            { id: 7, name: 'Chicken Caesar Salad', price: 8.29, cal: 460, time: '8-10', image: '🥗', category: 'Salads', hasRecipe: true },
-            { id: 8, name: 'Mac & Cheese', price: 6.49, cal: 640, time: '8-10', image: '🧈', category: 'Comfort' },
-            { id: 9, name: 'Healthier Cookies', price: 4.99, cal: 150, time: '15-18', image: '🍪', category: 'Dessert', hasRecipe: true },
-        ],
-        'Groceries': [
-            { id: 101, name: 'Bananas (6 ct)', price: 1.99, image: '🍌', category: 'Produce' },
-            { id: 102, name: 'Strawberries (1 lb)', price: 3.99, image: '🍓', category: 'Produce' },
-            { id: 103, name: 'Whole Wheat Bread', price: 2.49, image: '🍞', category: 'Bakery' },
-            { id: 104, name: 'Milk (1/2 gal)', price: 2.99, image: '🥛', category: 'Dairy' },
-            { id: 105, name: 'Eggs (12 ct)', price: 3.49, image: '🥚', category: 'Dairy' },
-        ],
-        'Outside Food': [
-            { id: 201, name: 'Panda Express Plate', price: 11.49, time: '18-28', image: '🥡', restaurant: 'Panda Express' },
-            { id: 202, name: 'Chick-fil-A Sandwich Meal', price: 10.49, time: '12-20', image: '🍔', restaurant: 'Chick-fil-A' },
-            { id: 203, name: 'Double-Double Combo', price: 9.99, time: '10-18', image: '🍔', restaurant: 'In-N-Out' },
-            { id: 204, name: '10pc Classic Wings + Fries', price: 14.49, time: '18-25', image: '🍗', restaurant: 'Wingstop' },
-        ],
-    };
-
-    // ----------- Helpers: Images (no downloads needed) -----------
-    // Uses Unsplash Source. In prod, check license/attribution needs; avoid hotlinking brand logos.
-    const imageFor = (name) =>
-        `https://source.unsplash.com/600x400/?${encodeURIComponent(name + ', food')}`;
-
-    // ----------- Cart + Checkout -----------
-    const addToCart = (item) => {
-        const exists = cart.find((c) => c.id === item.id);
-        if (exists) setCart(cart.map((c) => (c.id === item.id ? { ...c, qty: c.qty + 1 } : c)));
-        else setCart([...cart, { ...item, qty: 1 }]);
-    };
-
-    const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-    const discountAmount = subtotal * discount;
-    const total = subtotal - discountAmount;
-
-    const handleCheckout = () => {
-        if (!address.trim()) return alert('Enter a delivery address first!');
-        alert(
-            `Order placed!\nDelivering to: ${address}\nTotal: $${total.toFixed(
-                2
-            )}\nEstimated delivery: 25-35 mins`
-        );
-        setCart([]);
-        setView('menu');
-    };
-
-    // ----------- Recipe Logic -----------
-    const currentRecipe = selectedRecipe ? recipes[selectedRecipe] : null;
-    const scaleQty = (qty, factor) => {
-        const m = String(qty).match(/([0-9]*\.?[0-9]+)/);
-        if (!m) return `${qty} × ${factor}`;
-        const scaled = parseFloat(m[1]) * factor;
-        return String(qty).replace(m[1], (Math.round(scaled * 100) / 100).toString());
-    };
-
-    const scaledIngredients = useMemo(() => {
-        if (!currentRecipe) return [];
-        const factor = servings / currentRecipe.baseServings;
-        return currentRecipe.ingredients.map((i) => ({
-            ...i,
-            qty: scaleQty(i.qty, factor),
-        }));
-    }, [currentRecipe, servings]);
-
-    // ----------- Estimated Macros in Cart (from meals only) -----------
-    // We count macros from items that match a recipe by name OR have ids like 'premade-<Recipe Name>'
-    const cartMacros = useMemo(() => {
-        const totals = { cal: 0, protein: 0, carbs: 0, fat: 0 };
-        for (const item of cart) {
-            // try by name
-            let recipeName = null;
-            if (recipes[item.name]) recipeName = item.name;
-            // try premade id format
-            if (!recipeName && typeof item.id === 'string' && item.id.startsWith('premade-')) {
-                const n = item.id.replace(/^premade-/, '');
-                if (recipes[n]) recipeName = n;
-            }
-            if (!recipeName) continue;
-
-            const m = recipes[recipeName].macrosPerServing;
-            // assume 1 serving per pre-made item ordered
-            totals.cal += m.cal * item.qty;
-            totals.protein += m.protein * item.qty;
-            totals.carbs += m.carbs * item.qty;
-            totals.fat += m.fat * item.qty;
+    const handleAddCurrentBag = () => {
+        if (preset === 'chef') {
+            // Chef’s choice = defaults, no custom upcharge, no steak upcharge
+            addBag({
+                preset: 'chef',
+                protein: 'chef-choice',
+                carb: 'chef-choice',
+                veg: 'chef-choice',
+                sauce: 'chef-choice',
+                price: BASE_PRICE,
+            });
+        } else {
+            addBag({
+                preset: 'custom',
+                protein,
+                carb,
+                veg,
+                sauce,
+                price: currentBagPrice,
+            });
         }
-        // round nicely
-        for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k]);
-        return totals;
-    }, [cart]);
+    };
 
-    // ----------- UI -----------
-    const currentItems = menuData[selectedSection] || [];
+    const removeBag = (id) => setBags((prev) => prev.filter((b) => b.id !== id));
 
-    return (
-        <div className="app-bg">
-            <div className="container">
-                {/* Header */}
-                <div className="card header">
-                    <div>
-                        <h1 className="title">🔱 SunDevil Eats</h1>
-                        <p className="subtitle">Everything You Need, Delivered</p>
-                    </div>
-                    <button
-                        className="btn btn-maroon"
-                        onClick={() => setView(view === 'cart' ? 'menu' : 'cart')}
-                    >
-                        <ShoppingCart size={18} /> Cart ({cart.length})
-                    </button>
+    const clearBuilder = () => {
+        setPreset('chef');
+        setProtein('chicken');
+        setCarb('rice');
+        setVeg('broccoli');
+        setSauce('none');
+    };
+
+    // Quick bundles
+    const addBundle = (count) => {
+        const items = Array.from({ length: count }).map(() => ({
+            preset: 'chef',
+            protein: 'chef-choice',
+            carb: 'chef-choice',
+            veg: 'chef-choice',
+            sauce: 'chef-choice',
+            price: BASE_PRICE,
+        }));
+        setBags((prev) => {
+            const start = prev.length;
+            const withIds = items.map((b, i) => ({ ...b, id: `bag-${start + i + 1}` }));
+            return [...prev, ...withIds];
+        });
+    };
+
+    // Totals
+    const subtotal = useMemo(() => bags.reduce((s, b) => s + b.price, 0), [bags]);
+
+    const bundleDiscount = useMemo(() => {
+        // apply the biggest matching discount (3-pack or 5-pack) per threshold
+        let discount = 0;
+        const n = bags.length;
+        // allow stacking: e.g., 5-pack discount applies once for each multiple of 5; leftover 3-pack discount applies for remainder
+        if (n >= 5) {
+            const fives = Math.floor(n / 5);
+            discount += fives * BUNDLE_DISCOUNTS[5];
+            const rem = n % 5;
+            if (rem >= 3) discount += BUNDLE_DISCOUNTS[3];
+        } else if (n >= 3) {
+            const threes = Math.floor(n / 3);
+            discount += threes * BUNDLE_DISCOUNTS[3];
+        }
+        return discount;
+    }, [bags.length]);
+
+    const total = Math.max(0, subtotal - bundleDiscount);
+
+    const canDeliver = campus && CAMPUSES.find((c) => c.id === campus)?.delivery;
+
+    const placeOrder = () => {
+        if (!campus) return alert('Pick a campus first!');
+        if (bags.length === 0) return alert('Add at least one meal bag.');
+
+        if (fulfillment === 'delivery') {
+            if (!canDeliver) return alert('Delivery is Tempe-campus only.');
+            if (!address.trim()) return alert('Enter a delivery address.');
+        }
+
+        const lines = bags
+            .map((b, idx) => {
+                if (b.preset === 'chef') return `Bag #${idx + 1}: Chef's Choice ($${b.price.toFixed(2)})`;
+                return `Bag #${idx + 1}: ${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)}) — $${b.price.toFixed(2)}`;
+            })
+            .join('\n');
+
+        const method =
+            fulfillment === 'pickup'
+                ? `Pickup at ${campus} — ${pickupTime}`
+                : `Delivery (Tempe) — ${address}`;
+
+        alert(
+            `Order placed! 🎉\n\nCampus: ${campus}\nMethod: ${method}\n\nItems:\n${lines}\n\nSubtotal: $${subtotal.toFixed(
+                2
+            )}\nBundle Discount: -$${bundleDiscount.toFixed(2)}\nTotal: $${total.toFixed(2)}`
+        );
+
+        // reset
+        setBags([]);
+        clearBuilder();
+        setView('home');
+    };
+
+    // Utils
+    function labelFor(list, id) {
+        return list.find((x) => x.id === id)?.label || id;
+    }
+
+    // UI SECTIONS -------------------------------------------------------------
+
+    const Home = () => (
+        <div className="card">
+            <h1 className="title">🔱 SunDevil Eats — Meal Prep</h1>
+            <p className="subtitle">Healthy, bagged meals for students — grab & go from your campus store.</p>
+
+            {/* Campus Picker */}
+            <div className="card-lite" style={{ marginTop: 12 }}>
+                <label className="label"><MapPin size={16} /> Choose Campus</label>
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                    {CAMPUSES.map((c) => (
+                        <button
+                            key={c.id}
+                            className={`btn ${campus === c.id ? 'btn-maroon' : 'btn-lite'}`}
+                            onClick={() => {
+                                setCampus(c.id);
+                                setFulfillment('pickup');
+                            }}
+                        >
+                            {c.label}
+                        </button>
+                    ))}
                 </div>
-
-                {/* Menu */}
-                {view === 'menu' && (
-                    <>
-                        <div className="tabs">
-                            {sections.map((s) => (
-                                <button
-                                    key={s.name}
-                                    className={`tab ${selectedSection === s.name ? 'active' : ''}`}
-                                    onClick={() => setSelectedSection(s.name)}
-                                >
-                                    {s.icon} {s.name}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="grid">
-                            {currentItems.map((item) => (
-                                <div key={item.id} className="card product">
-                                    <div className="product-hero">
-                                        <img
-                                            src={imageFor(item.name)}
-                                            alt={item.name}
-                                            loading="lazy"
-                                            onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                            }}
-                                            style={{ width: '100%', borderRadius: 12, objectFit: 'cover' }}
-                                        />
-                                        <div className="emoji" aria-hidden>
-                                            {item.image}
-                                        </div>
-                                    </div>
-                                    <h3>{item.name}</h3>
-                                    <p className="muted">{item.category || item.restaurant || ''}</p>
-                                    <div className="product-meta">
-                                        <span className="price">${item.price.toFixed(2)}</span>
-                                        <div className="meta-right">
-                                            {item.time && (
-                                                <span className="meta">
-                          <Clock size={14} /> {item.time} min
-                        </span>
-                                            )}
-                                            {item.cal && <span className="meta">🔥 {item.cal} cal</span>}
-                                        </div>
-                                    </div>
-
-                                    <div className="product-actions">
-                                        <button className="btn btn-grad" onClick={() => addToCart(item)}>
-                                            + Add to Cart
-                                        </button>
-                                        {item.hasRecipe && (
-                                            <button
-                                                className="btn btn-lite"
-                                                onClick={() => {
-                                                    setSelectedRecipe(item.name);
-                                                    setServings(recipes[item.name].baseServings);
-                                                    setView('recipe');
-                                                }}
-                                            >
-                                                🧑‍🍳 View Recipe
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </>
+                {campus && (
+                    <p className="muted" style={{ marginTop: 8 }}>
+                        {canDeliver ? 'Delivery available at Tempe or choose pickup.' : 'Pickup only at this campus.'}
+                    </p>
                 )}
+            </div>
 
-                {/* Recipe */}
-                {view === 'recipe' && currentRecipe && (
-                    <div className="card recipe">
-                        <div className="product-hero">
-                            <img
-                                src={imageFor(selectedRecipe)}
-                                alt={selectedRecipe}
-                                loading="lazy"
-                                onError={(e) => (e.currentTarget.style.display = 'none')}
-                                style={{ width: '100%', borderRadius: 12, objectFit: 'cover' }}
-                            />
-                            <div className="emoji" aria-hidden>
-                                🍽️
-                            </div>
-                        </div>
-
-                        <h2>{selectedRecipe}</h2>
-                        <div className="macros">
-                            <p>
-                                <strong>Per Serving:</strong> {currentRecipe.macrosPerServing.cal} cal •{' '}
-                                {currentRecipe.macrosPerServing.protein}g P •{' '}
-                                {currentRecipe.macrosPerServing.carbs}g C • {currentRecipe.macrosPerServing.fat}g F
-                            </p>
-                            <label className="servings">
-                                Servings:{' '}
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={servings}
-                                    onChange={(e) => setServings(Number(e.target.value))}
-                                />
-                            </label>
-                        </div>
-
-                        <h3>Ingredients</h3>
-                        <ul>
-                            {scaledIngredients.map((i, idx) => (
-                                <li key={idx}>
-                                    {i.qty} {i.name}
-                                </li>
-                            ))}
-                        </ul>
-
-                        <h3>Steps</h3>
-                        <ol>
-                            {currentRecipe.steps.map((s, i) => (
-                                <li key={i}>{s}</li>
-                            ))}
-                        </ol>
-
-                        <div className="recipe-actions">
-                            <button
-                                className="btn btn-grad"
-                                onClick={() => alert('🛒 Ingredients added to cart!')}
-                            >
-                                Add Ingredients to Cart
-                            </button>
-                            <button
-                                className="btn btn-maroon"
-                                onClick={() => {
-                                    addToCart({
-                                        id: `premade-${selectedRecipe}`,
-                                        name: selectedRecipe,
-                                        price: 9.99,
-                                        image: '🍽️',
-                                        qty: 1,
-                                    });
-                                    alert('✅ Pre-made meal added to cart!');
-                                }}
-                            >
-                                Order Pre-Made Instead
-                            </button>
-                            <button className="btn btn-lite" onClick={() => setView('menu')}>
-                                ← Back
-                            </button>
-                        </div>
+            {/* Fulfillment */}
+            {campus && (
+                <div className="card-lite" style={{ marginTop: 12 }}>
+                    <label className="label"><Truck size={16} /> Fulfillment</label>
+                    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                        <button
+                            className={`btn ${fulfillment === 'pickup' ? 'btn-maroon' : 'btn-lite'}`}
+                            onClick={() => setFulfillment('pickup')}
+                        >
+                            Pickup
+                        </button>
+                        <button
+                            className={`btn ${fulfillment === 'delivery' ? 'btn-maroon' : 'btn-lite'}`}
+                            onClick={() => setFulfillment('delivery')}
+                            disabled={!canDeliver}
+                            title={!canDeliver ? 'Delivery is Tempe-only' : 'Delivery (Tempe)'}
+                        >
+                            Delivery {canDeliver ? '' : '(Tempe only)'}
+                        </button>
                     </div>
-                )}
 
-                {/* Cart */}
-                {view === 'cart' && (
-                    <div className="card">
-                        <h2>🛒 Your Cart</h2>
-                        {cart.length === 0 ? (
-                            <p>Your cart is empty.</p>
-                        ) : (
-                            <>
-                                <ul>
-                                    {cart.map((i, idx) => (
-                                        <li key={idx}>
-                                            {i.image} {i.name} — ${i.price.toFixed(2)} × {i.qty}
-                                        </li>
-                                    ))}
-                                </ul>
-
-                                {/* Estimated macros from meals */}
-                                {(cartMacros.cal + cartMacros.protein + cartMacros.carbs + cartMacros.fat > 0) && (
-                                    <div
-                                        style={{
-                                            marginTop: 12,
-                                            padding: '10px 12px',
-                                            border: '1px solid #eaeaea',
-                                            borderRadius: 12,
-                                            background: '#fffdf6',
-                                        }}
-                                    >
-                                        <strong>Estimated Macros (meals in cart):</strong>
-                                        <div style={{ marginTop: 6 }}>
-                                            {cartMacros.cal} cal • {cartMacros.protein}g P • {cartMacros.carbs}g C •{' '}
-                                            {cartMacros.fat}g F
-                                        </div>
-                                        <div style={{ fontSize: 12, color: '#777', marginTop: 4 }}>
-                                            Groceries are not counted in macros.
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-
-                        <div style={{ marginTop: 16 }}>
-                            <p>
-                                <strong>Total:</strong> ${total.toFixed(2)}
-                            </p>
+                    {fulfillment === 'pickup' ? (
+                        <div style={{ marginTop: 10 }}>
+                            <label className="label"><Clock size={16} /> Pickup Time</label>
+                            <select className="input" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)}>
+                                <option>Today 4:00–4:30 PM</option>
+                                <option>Today 5:00–5:30 PM</option>
+                                <option>Today 6:00–6:30 PM</option>
+                                <option>Tomorrow 12:00–12:30 PM</option>
+                            </select>
                         </div>
-
-                        <div className="promo card-lite" style={{ marginTop: 12 }}>
-                            <label className="promo-label">
-                                <Sparkles size={16} /> Promo Code
-                            </label>
-                            <div className="promo-row">
-                                <input
-                                    className="input"
-                                    placeholder="ASU10, FIRST20, FORKS"
-                                    value={promoCode}
-                                    onChange={(e) => setPromoCode(e.target.value)}
-                                />
-                                <button
-                                    className="btn btn-yellow"
-                                    onClick={() => {
-                                        const code = promoCode.trim().toUpperCase();
-                                        if (code === 'ASU10') {
-                                            setDiscount(0.1);
-                                            alert('🎉 10% student discount applied!');
-                                        } else if (code === 'FIRST20') {
-                                            setDiscount(0.2);
-                                            alert('🎉 20% first order discount applied!');
-                                        } else if (code === 'FORKS') {
-                                            alert('✅ Free utensils added to your order!');
-                                        } else {
-                                            setDiscount(0);
-                                            alert('❌ Invalid promo code');
-                                        }
-                                    }}
-                                >
-                                    Apply
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="address card-lite" style={{ marginTop: 12 }}>
-                            <label className="label">
-                                <MapPin size={16} /> Delivery Address
-                            </label>
+                    ) : (
+                        <div style={{ marginTop: 10 }}>
+                            <label className="label"><MapPin size={16} /> Delivery Address (Tempe)</label>
                             <input
                                 className="input"
-                                placeholder="Enter your dorm or ASU address..."
+                                placeholder="e.g., Tooker House, 500 E University Dr"
                                 value={address}
                                 onChange={(e) => setAddress(e.target.value)}
                             />
-                            <label className="label">
-                                <MessageSquare size={16} /> Delivery Instructions (Optional)
-                            </label>
-                            <textarea
-                                className="input textarea"
-                                rows={3}
-                                placeholder="e.g., Leave at door, call when here, gate code..."
-                                value={orderInstructions}
-                                onChange={(e) => setOrderInstructions(e.target.value)}
-                            />
                         </div>
+                    )}
+                </div>
+            )}
 
-                        <button className="btn btn-grad big" onClick={handleCheckout} style={{ marginTop: 12 }}>
-                            Place Order
-                        </button>
-                        <button className="btn btn-lite" onClick={() => setView('menu')} style={{ marginTop: 8 }}>
-                            ← Back
-                        </button>
-                    </div>
-                )}
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button className="btn btn-grad" onClick={() => setView('build')} disabled={!campus}>
+                    Build Meal Bags
+                </button>
+                <button className="btn btn-lite" onClick={() => setView('cart')}>
+                    View Cart ({bags.length})
+                </button>
             </div>
         </div>
     );
-};
 
-export default FoodDeliveryApp;
+    const Builder = () => (
+        <div className="card">
+            <h2 className="section-title">🧑‍🍳 Build Your Bag</h2>
+            <p className="muted">Chef’s Choice is fastest & cheapest. Custom lets you swap components (steak +$2).</p>
+
+            {/* Preset toggle */}
+            <div className="card-lite" style={{ marginTop: 8 }}>
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                    <button className={`btn ${preset === 'chef' ? 'btn-maroon' : 'btn-lite'}`} onClick={() => setPreset('chef')}>
+                        Chef’s Choice — ${BASE_PRICE.toFixed(2)}
+                    </button>
+                    <button className={`btn ${preset === 'custom' ? 'btn-maroon' : 'btn-lite'}`} onClick={() => setPreset('custom')}>
+                        Custom (+${CUSTOM_UPCHARGE.toFixed(2)})
+                    </button>
+                </div>
+            </div>
+
+            {/* Custom controls */}
+            {preset === 'custom' && (
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 12 }}>
+                    <div>
+                        <label className="label">Protein</label>
+                        <select className="input" value={protein} onChange={(e) => setProtein(e.target.value)}>
+                            {PROTEINS.map((p) => (
+                                <option key={p.id} value={p.id}>{p.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="label">Carb</label>
+                        <select className="input" value={carb} onChange={(e) => setCarb(e.target.value)}>
+                            {CARBS.map((c) => (
+                                <option key={c.id} value={c.id}>{c.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="label">Veggie</label>
+                        <select className="input" value={veg} onChange={(e) => setVeg(e.target.value)}>
+                            {VEGGIES.map((v) => (
+                                <option key={v.id} value={v.id}>{v.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="label">Sauce</label>
+                        <select className="input" value={sauce} onChange={(e) => setSauce(e.target.value)}>
+                            {SAUCES.map((s) => (
+                                <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            )}
+
+            {/* Price + Add */}
+            <div className="card-lite" style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                    <strong>Price:</strong>{' '}
+                    {preset === 'chef' ? `$${BASE_PRICE.toFixed(2)}` : `$${currentBagPrice.toFixed(2)}`}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-grad" onClick={() => { handleAddCurrentBag(); }}>
+                        + Add Bag
+                    </button>
+                    <button className="btn btn-lite" onClick={clearBuilder}>Reset</button>
+                </div>
+            </div>
+
+            {/* Quick bundles */}
+            <div className="card-lite" style={{ marginTop: 8 }}>
+                <label className="label">Quick Add Bundles (Chef’s Choice)</label>
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    <button className="btn btn-lite" onClick={() => addBundle(3)}>
+                        3-Pack — save ${BUNDLE_DISCOUNTS[3].toFixed(2)}
+                    </button>
+                    <button className="btn btn-lite" onClick={() => addBundle(5)}>
+                        5-Pack — save ${BUNDLE_DISCOUNTS[5].toFixed(2)}
+                    </button>
+                </div>
+            </div>
+
+            {/* Cart preview */}
+            <div className="card-lite" style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <h3>Your Bags</h3>
+                    <button className="btn btn-maroon" onClick={() => setView('cart')}>
+                        <ShoppingCart size={16} /> Cart ({bags.length})
+                    </button>
+                </div>
+
+                {bags.length === 0 ? (
+                    <p className="muted">No bags yet. Add one above or use a quick bundle.</p>
+                ) : (
+                    <ul style={{ marginTop: 8 }}>
+                        {bags.map((b, i) => (
+                            <li key={b.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                <span>
+                  <strong>Bag #{i + 1}:</strong>{' '}
+                    {b.preset === 'chef'
+                        ? "Chef's Choice"
+                        : `${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)})`}
+                </span>
+                                <span>
+                  ${b.price.toFixed(2)}{' '}
+                                    <button className="btn btn-lite" onClick={() => removeBag(b.id)} style={{ marginLeft: 8 }}>Remove</button>
+                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            {/* Subtotals */}
+            <div className="card-lite" style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal</span>
+                    <strong>${subtotal.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1a7f37' }}>
+                    <span>Bundle Discount</span>
+                    <strong>- ${bundleDiscount.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', marginTop: 6, paddingTop: 6 }}>
+                    <span>Total</span>
+                    <strong>${total.toFixed(2)}</strong>
+                </div>
+            </div>
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="btn btn-lite" onClick={() => setView('home')}>← Back</button>
+                <button className="btn btn-grad" onClick={() => setView('cart')}>
+                    Review & Checkout
+                </button>
+            </div>
+        </div>
+    );
+
+    const Cart = () => (
+        <div className="card">
+            <h2>🛒 Checkout</h2>
+
+            <div className="card-lite" style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Campus</span>
+                    <strong>{campus || '—'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                    <span>Method</span>
+                    <strong>
+                        {fulfillment === 'pickup'
+                            ? `Pickup — ${pickupTime}`
+                            : 'Delivery (Tempe only)'}
+                    </strong>
+                </div>
+            </div>
+
+            {fulfillment === 'delivery' && canDeliver && (
+                <div className="card-lite" style={{ marginTop: 8 }}>
+                    <label className="label"><MapPin size={16} /> Delivery Address (Tempe)</label>
+                    <input
+                        className="input"
+                        placeholder="e.g., 123 E Lemon St, Tempe, AZ"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                    />
+                </div>
+            )}
+
+            <div className="card-lite" style={{ marginTop: 8 }}>
+                <h3>Bags</h3>
+                {bags.length === 0 ? (
+                    <p className="muted">No items. Go back and add bags.</p>
+                ) : (
+                    <ul style={{ marginTop: 6 }}>
+                        {bags.map((b, i) => (
+                            <li key={b.id} style={{ padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>
+                    <strong>Bag #{i + 1}:</strong>{' '}
+                      {b.preset === 'chef'
+                          ? "Chef's Choice"
+                          : `${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)})`}
+                  </span>
+                                    <strong>${b.price.toFixed(2)}</strong>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            <div className="card-lite" style={{ marginTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal</span>
+                    <strong>${subtotal.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1a7f37' }}>
+                    <span>Bundle Discount</span>
+                    <strong>- ${bundleDiscount.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', marginTop: 6, paddingTop: 6 }}>
+                    <span>Total</span>
+                    <strong>${total.toFixed(2)}</strong>
+                </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="btn btn-lite" onClick={() => setView('build')}>← Back</button>
+                <button className="btn btn-grad" onClick={placeOrder} disabled={bags.length === 0}>
+                    Place Order
+                </button>
+            </div>
+        </div>
+    );
+
+    // RENDER
+    return (
+        <div className="app-bg">
+            <div className="container">
+                <div className="card header" style={{ marginBottom: 12 }}>
+                    <div>
+                        <h1 className="title">🔱 SunDevil Eats</h1>
+                        <p className="subtitle">Campus Meal Prep — bagged, ready to grab.</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-lite" onClick={() => setView('home')}>Campus</button>
+                        <button className="btn btn-maroon" onClick={() => setView('cart')}>
+                            <ShoppingCart size={16} /> Cart ({bags.length})
+                        </button>
+                    </div>
+                </div>
+
+                {view === 'home' && <Home />}
+                {view === 'build' && <Builder />}
+                {view === 'cart' && <Cart />}
+
+                {/* Footer credit for images if you add any later */}
+                <footer style={{ marginTop: 20, textAlign: 'center', fontSize: '0.85rem', color: '#aaa', borderTop: '1px solid #222', paddingTop: '1rem' }}>
+                    Photos courtesy of <a href="https://unsplash.com" target="_blank" rel="noreferrer" style={{ color: '#8c1d40', textDecoration: 'none' }}>Unsplash</a>
+                </footer>
+            </div>
+        </div>
+    );
+}
