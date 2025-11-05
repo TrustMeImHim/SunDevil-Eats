@@ -4,7 +4,7 @@ import { ShoppingCart, MapPin, Clock, Truck } from 'lucide-react';
 /**
  * SunDevil Eats — Meal Prep Builder (Pickup-first + Tempe delivery)
  * - Campus selection gate
- * - Build “bags” (pre-made meals) with Chef's Choice or Custom selections
+ * - Build “bags” (pre-made meals) with Chicken + Rice or Custom selections
  * - Quick 3-pack / 5-pack bundles
  * - Pickup time; Delivery only if campus === "Tempe"
  * - Cart groups items by Bag # and totals with discounts & upcharges
@@ -169,7 +169,7 @@ export default function FoodDeliveryApp() {
 
         const lines = bags
             .map((b, idx) => {
-                if (b.preset === 'chef') return `Bag #${idx + 1}: Chef's Choice ($${b.price.toFixed(2)})`;
+                if (b.preset === 'chef') return `Bag #${idx + 1}: Chicken + Rice ($${b.price.toFixed(2)})`;
                 return `Bag #${idx + 1}: ${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)}) — $${b.price.toFixed(2)}`;
             })
             .join('\n');
@@ -384,7 +384,7 @@ export default function FoodDeliveryApp() {
                 <span>
                   <strong>Bag #{i + 1}:</strong>{' '}
                     {b.preset === 'chef'
-                        ? "Chef's Choice"
+                        ? "Chicken + Rice"
                         : `${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)})`}
                 </span>
                                 <span>
@@ -466,7 +466,7 @@ export default function FoodDeliveryApp() {
                   <span>
                     <strong>Bag #{i + 1}:</strong>{' '}
                       {b.preset === 'chef'
-                          ? "Chef's Choice"
+                          ? "Chicken + Rice"
                           : `${labelFor(PROTEINS, b.protein)} + ${labelFor(CARBS, b.carb)} + ${labelFor(VEGGIES, b.veg)} (${labelFor(SAUCES, b.sauce)})`}
                   </span>
                                     <strong>${b.price.toFixed(2)}</strong>
