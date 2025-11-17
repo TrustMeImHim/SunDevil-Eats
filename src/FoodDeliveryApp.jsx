@@ -1,4 +1,4 @@
-ximport React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ShoppingCart, MapPin, Clock, Truck, Flame } from 'lucide-react';
 
 /** ================================================================
