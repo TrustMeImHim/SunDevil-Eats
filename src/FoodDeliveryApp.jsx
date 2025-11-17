@@ -18,7 +18,7 @@ const CAMPUSES = [
 ];
 
 // Pricing
-const BASE_PRICE = 8.99;             // Chef’s Choice / Standard
+const BASE_PRICE = 13.5;             // Chef’s Choice / Standard
 const CUSTOM_UPCHARGE = 1.5;         // Custom build
 const STEAK_UPCHARGE = 2.0;          // Steak premium
 const SEAFOOD_UPCHARGE = 2.0;        // Salmon/Shrimp premium
