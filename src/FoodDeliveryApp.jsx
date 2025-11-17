@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ShoppingCart, MapPin, Clock, Truck, Flame } from 'lucide-react';
+import { ShoppingCart, MapPin, Clock, Truck, Flame, Crown } from 'lucide-react';
 
 /** ================================================================
  * SunDevil Eats — Meal Prep Builder (Chef’s Choice simplified + More Custom)
@@ -18,13 +18,15 @@ const CAMPUSES = [
 ];
 
 // Pricing
-const BASE_PRICE = 13.50;             // Chef’s Choice / Standard
+const BASE_PRICE = 13.50;             // Chef's Choice / Standard
 const CUSTOM_UPCHARGE = 1.5;         // Custom build
 const STEAK_UPCHARGE = 2.0;          // Steak premium
 const SEAFOOD_UPCHARGE = 2.0;        // Salmon/Shrimp premium
 const LARGE_UPCHARGE = 2.5;          // Portion Large premium
 const DELIVERY_FEE = 2.99;           // Delivery fee (Tempe only)
 const BUNDLE_DISCOUNTS = { 3: 1.5, 5: 4.0, 7: 6.5, 10: 10.0 }; // $ off
+const PREMIUM_FOOD_DISCOUNT = 0.10;  // 10% discount on food for premium members
+const PREMIUM_DELIVERY_DISCOUNT = 0.50; // $0.50 off delivery for premium members
 
 // Options — expanded
 const PROTEINS = [
@@ -169,6 +171,9 @@ export default function FoodDeliveryApp() {
     const [view, setView] = useState('home'); // 'home' | 'build' | 'cart'
     const [campus, setCampus] = useState(null);
 
+    // Premium membership
+    const [isPremium, setIsPremium] = useState(false); // Premium membership status
+
     // Fulfillment
     const [fulfillment, setFulfillment] = useState('pickup'); // 'pickup' | 'delivery'
     const [pickupTime, setPickupTime] = useState('Today 5:00–5:30 PM');
@@ -209,8 +214,12 @@ export default function FoodDeliveryApp() {
         }
         if (portion === 'large') p += LARGE_UPCHARGE;
         for (const x of EXTRAS) if (extras[x.id]) p += x.price;
+        // Apply premium discount
+        if (isPremium) {
+            p = p * (1 - PREMIUM_FOOD_DISCOUNT);
+        }
         return p;
-    }, [mode, protein, portion, extras]);
+    }, [mode, protein, portion, extras, isPremium]);
 
     const addBag = (bag) =>
         setBags(prev => [...prev, { ...bag, id: `bag-${prev.length + 1}` }]);
@@ -245,13 +254,18 @@ export default function FoodDeliveryApp() {
     const handleAddCurrentBag = () => {
         if (mode === 'chef') {
             const { protein: p, carb: c, veg: v, sauce: s } = chefSuggestion;
+            let price = BASE_PRICE;
+            // Apply premium discount to chef's choice
+            if (isPremium) {
+                price = price * (1 - PREMIUM_FOOD_DISCOUNT);
+            }
             addBag({
                 preset: 'chef',
                 protein: p, carb: c, veg: v, sauce: s,
                 portion: 'standard',
                 spice: 0,
                 extras: [],
-                price: BASE_PRICE,
+                price: price,
             });
         } else {
             const chosenExtras = EXTRAS.filter(x => extras[x.id]).map(x => x.id);
@@ -266,13 +280,18 @@ export default function FoodDeliveryApp() {
 
     // Bundles (stackable)
     const addBundle = (count) => {
+        let basePrice = BASE_PRICE;
+        // Apply premium discount to bundle items
+        if (isPremium) {
+            basePrice = basePrice * (1 - PREMIUM_FOOD_DISCOUNT);
+        }
         const items = Array.from({ length: count }).map(() => ({
             preset: 'chef',
             ...chefRecommend(chefGoal, chefCuisine, Object.keys(chefDislikes).filter(k => chefDislikes[k])),
             portion: 'standard',
             spice: 0,
             extras: [],
-            price: BASE_PRICE,
+            price: basePrice,
         }));
         setBags(prev => {
             const start = prev.length;
@@ -301,8 +320,26 @@ export default function FoodDeliveryApp() {
     }, [bags.length]);
 
     const deliveryFee = useMemo(() => {
-        return (fulfillment === 'delivery' && canDeliver) ? DELIVERY_FEE : 0;
-    }, [fulfillment, canDeliver]);
+        if (fulfillment === 'delivery' && canDeliver) {
+            let fee = DELIVERY_FEE;
+            // Apply premium discount to delivery
+            if (isPremium) {
+                fee = Math.max(0, fee - PREMIUM_DELIVERY_DISCOUNT);
+            }
+            return fee;
+        }
+        return 0;
+    }, [fulfillment, canDeliver, isPremium]);
+
+    const premiumDiscount = useMemo(() => {
+        if (!isPremium) return 0;
+        // Calculate total premium savings
+        // Since prices are already discounted, calculate what the original would have been
+        const originalSubtotal = subtotal / (1 - PREMIUM_FOOD_DISCOUNT);
+        const foodDiscount = originalSubtotal * PREMIUM_FOOD_DISCOUNT;
+        const deliveryDiscount = (fulfillment === 'delivery' && canDeliver) ? PREMIUM_DELIVERY_DISCOUNT : 0;
+        return foodDiscount + deliveryDiscount;
+    }, [isPremium, subtotal, fulfillment, canDeliver]);
 
     const total = Math.max(0, subtotal - bundleDiscount + deliveryFee);
 
@@ -340,6 +377,9 @@ export default function FoodDeliveryApp() {
             'Subtotal: $' + subtotal.toFixed(2),
             'Bundle Discount: -$' + bundleDiscount.toFixed(2)
         ];
+        if (isPremium && premiumDiscount > 0) {
+            summaryLines.push('Premium Discount: -$' + premiumDiscount.toFixed(2));
+        }
         if (deliveryFee > 0) {
             summaryLines.push('Delivery Fee: $' + deliveryFee.toFixed(2));
         }
@@ -364,6 +404,29 @@ export default function FoodDeliveryApp() {
         <div className="card">
             <h1 className="title">🔱 SunDevil Eats — Meal Prep</h1>
             <p className="subtitle">Healthy, bagged meals for students — grab & go from your campus store.</p>
+
+            {/* Premium Membership */}
+            <div className="card-lite" style={{ marginTop: 10, backgroundColor: isPremium ? '#fff4e6' : undefined, border: isPremium ? '2px solid #ffd700' : undefined }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Crown size={20} color={isPremium ? '#ffd700' : '#666'} />
+                        <div>
+                            <strong>{isPremium ? 'Premium Member' : 'Standard Member'}</strong>
+                            {isPremium && (
+                                <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                                    10% off food • $0.50 off delivery
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        className={`btn ${isPremium ? 'btn-maroon' : 'btn-lite'}`}
+                        onClick={() => setIsPremium(!isPremium)}
+                    >
+                        {isPremium ? '✓ Premium Active' : 'Activate Premium'}
+                    </button>
+                </div>
+            </div>
 
             {/* Campus */}
             <div className="card-lite" style={{ marginTop: 10 }}>
@@ -657,6 +720,12 @@ export default function FoodDeliveryApp() {
                     <span>Bundle Discount</span>
                     <strong>- ${bundleDiscount.toFixed(2)}</strong>
                 </div>
+                {isPremium && premiumDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ffd700' }}>
+                        <span>Premium Discount</span>
+                        <strong>- ${premiumDiscount.toFixed(2)}</strong>
+                    </div>
+                )}
                 {deliveryFee > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Delivery Fee</span>
@@ -729,6 +798,12 @@ export default function FoodDeliveryApp() {
                     <span>Bundle Discount</span>
                     <strong>- ${bundleDiscount.toFixed(2)}</strong>
                 </div>
+                {isPremium && premiumDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ffd700' }}>
+                        <span>Premium Discount</span>
+                        <strong>- ${premiumDiscount.toFixed(2)}</strong>
+                    </div>
+                )}
                 {deliveryFee > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Delivery Fee</span>
@@ -754,7 +829,14 @@ export default function FoodDeliveryApp() {
             <div className="container">
                 <div className="card header" style={{ marginBottom: 12 }}>
                     <div>
-                        <h1 className="title">🔱 SunDevil Eats</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <h1 className="title">🔱 SunDevil Eats</h1>
+                            {isPremium && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', color: '#ffd700', fontWeight: 'bold' }}>
+                                    <Crown size={16} /> Premium
+                                </span>
+                            )}
+                        </div>
                         <p className="subtitle">Campus Meal Prep — bagged, ready to grab.</p>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
